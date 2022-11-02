@@ -1,0 +1,4 @@
+(executable
+ (public_name meshviz)
+ (name main)
+ (libraries meshviz OCADml raylib))
