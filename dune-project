@@ -1,25 +1,37 @@
-(lang dune 3.5)
+(lang dune 3.7)
 
 (name meshviz)
 
 (generate_opam_files true)
 
 (source
- (github username/reponame))
+ (github geoffder/meshviz))
 
-(authors "Author Name")
+(authors "Geoff deRosenroll")
 
-(maintainers "Maintainer Name")
+(maintainers "Geoff deRosenroll")
 
-(license LICENSE)
+(documentation https://geoffder.github.io/meshviz)
 
-(documentation https://url/to/documentation)
+(license GPL-3.0-or-later)
+
+(authors "Geoff deRosenroll<geoffderosenroll@gmail.com")
+
+(maintainers "Geoff deRosenroll<geoffderosenroll@gmail.com")
 
 (package
  (name meshviz)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml dune)
+ (depends
+  (ocaml
+   (>= 4.14.0))
+  dune
+  (gg
+   (>= 1.0.0))
+  (OCADml
+   (>= 0.4.0))
+  raylib)
  (tags
   (topics "to describe" your project)))
 

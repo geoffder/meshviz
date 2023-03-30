@@ -25,7 +25,7 @@ let sweep =
     Mesh.Cap.(
       capped
         ~bot:(round ~holes:`Same @@ chamf ~height:(-1.2) ~angle:(Float.pi /. 8.) ())
-        ~top:(round @@ circ (`Radius 0.5)))
+        ~top:(round @@ circ (`Radius 0.5)) )
   in
   Mesh.path_extrude ~path ~caps poly
   |> Mesh.rev_faces
@@ -64,35 +64,36 @@ let cones =
 
 let ocadml_mesh (om : OCADml.Mesh.t) =
   let mesh = Mesh.create () in
-  let n_faces = List.length om.faces in
+  let n_faces = List.length @@ OCADml.Mesh.faces om in
   let n_verts = n_faces * 3 in
   let verts = CArray.make Ctypes.float (n_verts * 3)
   and norms = CArray.make Ctypes.float (n_verts * 3)
   and tex = CArray.make Ctypes.float (n_verts * 2)
-  and ps = Array.of_list om.points in
+  and ps = Array.of_list @@ OCADml.Mesh.points om in
   let add_face s face =
+    let open OCADml in
     let poly = List.map (fun i -> ps.(i)) face in
-    let norm = OCADml.Path3.normal poly in
+    let norm = Path3.normal poly in
     let vert0 = s * 3 * 3
     and tex0 = s * 3 * 2 in
     List.iteri
       CArray.(
-        fun j OCADml.{ x; y; z } ->
+        fun j p ->
           let i = vert0 + (j * 3)
           and tx = tex0 + (j * 2) in
           let tx_x = (if s mod 2 = 0 then 0. else 0.5) +. (Float.of_int j *. 0.25)
           and tx_y = if j = 1 then 0.5 else 0. in
-          set verts i x;
-          set verts (i + 1) y;
-          set verts (i + 2) z;
-          set norms i norm.x;
-          set norms (i + 1) norm.y;
-          set norms (i + 2) norm.z;
+          set verts i (V3.x p);
+          set verts (i + 1) (V3.y p);
+          set verts (i + 2) (V3.z p);
+          set norms i (V3.x norm);
+          set norms (i + 1) (V3.y norm);
+          set norms (i + 2) (V3.z norm);
           set tex tx tx_x;
-          set tex (tx + 1) tx_y)
+          set tex (tx + 1) tx_y )
       poly
   in
-  List.iteri add_face om.faces;
+  List.iteri add_face @@ OCADml.Mesh.faces om;
   Mesh.set_triangle_count mesh n_faces;
   Mesh.set_vertex_count mesh n_verts;
   Mesh.set_vertices mesh verts;
@@ -129,6 +130,7 @@ let setup () =
   in
   let position = Vector3.create 0.0 0.0 0.0 in
   set_camera_mode camera CameraMode.Orbital;
+  (* set_camera_mode camera CameraMode.Free; *)
   set_target_fps 60;
   texture, models, camera, position, ref 0
 
@@ -156,10 +158,10 @@ let rec loop ((texture, models, camera, position, curr_model) as args) =
     draw_rectangle_lines 30 400 235 30 (fade Color.darkblue 0.5);
     draw_text "MOUSE LEFT BUTTON to CYCLE MODELS" 40 410 10 Color.blue;
     ( match !curr_model with
-    | 0 -> draw_text "cones" 580 10 20 Color.darkblue
-    | 1 -> draw_text "sweep" 580 10 20 Color.darkblue
-    | 2 -> draw_text "ring" 580 10 20 Color.darkblue
-    | _ -> () );
+      | 0 -> draw_text "cones" 580 10 20 Color.darkblue
+      | 1 -> draw_text "sweep" 580 10 20 Color.darkblue
+      | 2 -> draw_text "ring" 580 10 20 Color.darkblue
+      | _ -> () );
     end_drawing ();
     loop args )
 
