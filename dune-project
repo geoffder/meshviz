@@ -21,8 +21,8 @@
 
 (package
  (name meshviz)
- (synopsis "A short synopsis")
- (description "A longer description")
+ (synopsis "Mesh visualization tool")
+ (description "Mesh visualization tool")
  (depends
   (ocaml
    (>= 4.14.0))
@@ -31,8 +31,4 @@
    (>= 1.0.0))
   (OCADml
    (>= 0.4.0))
-  raylib)
- (tags
-  (topics "to describe" your project)))
-
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project
+  raylib))
