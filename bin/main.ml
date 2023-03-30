@@ -1,7 +1,6 @@
 open Raylib
 
 let get f i a = Raylib.CArray.get (f a) i
-let ( %. ) = Fun.flip
 
 let sweep =
   let open OCADml in
@@ -103,8 +102,26 @@ let ocadml_mesh (om : OCADml.Mesh.t) =
   mesh
 
 let setup () =
+  (* set_config_flags [ ConfigFlags.Msaa_4x_hint; ConfigFlags.Window_resizable ]; *)
   init_window 800 450 "raylib - OCADml mesh generation";
-  let checked = gen_image_checked 2 2 1 1 Color.red Color.green in
+  let shader =
+    (* load_shader "resources/base_lighting_instanced.vs" "resources/lighting.fs" *)
+    load_shader "bin/resources/lighting.vs" "bin/resources/lighting.fs"
+  in
+  if Shader.id shader = Unsigned.UInt.zero then failwith "Shader failed to compile";
+  let view_pos = get_shader_location shader "viewPos" in
+  let ambient = get_shader_location shader "ambient" in
+  let ambient_vec = Vector4.create 0.2 0.2 0.2 1.0 in
+  set_shader_value shader ambient (to_voidp (addr ambient_vec)) ShaderUniformDataType.Vec4;
+  let light =
+    Rlights.create_light
+      Rlights.Point
+      (Vector3.create 0.0 (-20.0) 0.0)
+      (Vector3.zero ())
+      Color.white
+      shader
+  in
+  let checked = gen_image_checked 2 2 1 1 Color.blue Color.blue in
   let texture = load_texture_from_image checked in
   unload_image checked;
   let models =
@@ -113,12 +130,18 @@ let setup () =
      ; load_model_from_mesh (ocadml_mesh ring)
     |]
   in
+  (* let material = load_material_default () in *)
+  (* Material.set_shader material shader; *)
+  (* MaterialMap.set_color (CArray.get (Material.maps material) 0) Color.red; *)
   Array.iter
     (fun model ->
-      model
-      |> get Model.materials 0
-      |> get Material.maps MaterialMapIndex.(to_int Albedo)
-      |> MaterialMap.set_texture %. texture )
+      let mat = get Model.materials 0 model in
+      Material.set_shader mat shader;
+      (* MaterialMap.set_color (CArray.get (Material.maps mat) 0) Color.blue; *)
+      MaterialMap.set_texture
+        (get Material.maps MaterialMapIndex.(to_int Albedo) mat)
+        texture;
+      Model.set_materials model (CArray.of_list Material.t [ mat ]) )
     models;
   let camera =
     Camera.create
@@ -132,12 +155,14 @@ let setup () =
   set_camera_mode camera CameraMode.Orbital;
   (* set_camera_mode camera CameraMode.Free; *)
   set_target_fps 60;
-  texture, models, camera, position, ref 0
+  Printf.printf "\nlight created (enabled = %b)\n%!" light.enabled;
+  texture, shader, models, camera, position, view_pos, ref 0
 
-let rec loop ((texture, models, camera, position, curr_model) as args) =
+let rec loop ((texture, shader, models, camera, position, view_pos, curr_model) as args) =
   if window_should_close ()
   then (
     unload_texture texture;
+    unload_shader shader;
     Array.iter unload_model models;
     close_window () )
   else (
@@ -147,11 +172,18 @@ let rec loop ((texture, models, camera, position, curr_model) as args) =
     if is_key_pressed Key.Left
     then
       curr_model := if !curr_model < 1 then Array.length models - 1 else !curr_model - 1;
+    let cpos = Camera3D.position camera in
+    let pos = Vector3.(create (x cpos) (y cpos) (z cpos)) in
+    let mat = get Model.materials 0 (Array.get models !curr_model) in
+    set_shader_value
+      (Material.shader mat)
+      view_pos
+      (pos |> addr |> to_voidp)
+      ShaderUniformDataType.Vec3;
     begin_drawing ();
     clear_background Color.raywhite;
     begin_mode_3d camera;
     draw_model models.(!curr_model) position 1.0 Color.white;
-    (* draw_model_wires models.(!curr_model) position 1.0 Color.black; *)
     draw_grid 10 1.0;
     end_mode_3d ();
     draw_rectangle 30 400 235 30 (fade Color.skyblue 0.5);

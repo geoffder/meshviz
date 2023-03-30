@@ -7,10 +7,6 @@
 (source
  (github geoffder/meshviz))
 
-(authors "Geoff deRosenroll")
-
-(maintainers "Geoff deRosenroll")
-
 (documentation https://geoffder.github.io/meshviz)
 
 (license GPL-3.0-or-later)
