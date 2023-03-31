@@ -1,2 +1,13 @@
 (library
- (name meshviz))
+ (name meshviz)
+ (libraries OCADml raylib dune-site))
+
+(install
+ (files "resources/lighting.vs" "resources/lighting.fs")
+ (section
+  (site
+   (meshviz shaders))))
+
+(generate_sites_module
+ (module DuneSites)
+ (sites meshviz))

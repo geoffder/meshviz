@@ -1,142 +1,34 @@
 open Raylib
+open Meshviz
 
 let get f i a = Raylib.CArray.get (f a) i
-
-let sweep =
-  let open OCADml in
-  let control =
-    V3.[ v 5. 5. 12.; v 0. 20. 20.; v 30. 30. 0.; v 50. 20. 5.; v 35. (-10.) 15. ]
-  in
-  let path = Bezier3.curve ~fn:30 @@ Bezier3.of_path control in
-  let poly =
-    let holes =
-      let s = Path2.circle ~fn:90 2.
-      and d = 1.9 in
-      Path2.[ translate (v2 (-.d) (-.d)) s; translate (v2 d d) s ]
-    and outer =
-      Path2.square ~center:true (v2 10. 10.)
-      |> Path2.Round.(flat ~corner:(chamf (`Width 2.)))
-      |> Path2.roundover
-    in
-    Poly2.make ~holes outer
-  in
-  let caps =
-    Mesh.Cap.(
-      capped
-        ~bot:(round ~holes:`Same @@ chamf ~height:(-1.2) ~angle:(Float.pi /. 8.) ())
-        ~top:(round @@ circ (`Radius 0.5)) )
-  in
-  Mesh.path_extrude ~path ~caps poly
-  |> Mesh.rev_faces
-  |> Mesh.triangulate
-  |> Mesh.scale (v3 0.08 0.08 0.08)
-  |> Mesh.xrot (Float.pi /. 2.)
-  |> Mesh.translate (v3 (-2.) 2. 0.)
-
-let ring =
-  let open OCADml in
-  Mesh.extrude
-    ~center:true
-    ~height:1.
-    (Poly2.ring ~thickness:(v2 1. 1.) ~fn:36 (v2 4. 4.))
-  |> Mesh.xrot (Float.pi /. 2.)
-  |> Mesh.ytrans 0.5
-  |> Mesh.rev_faces
-  |> Mesh.triangulate
-
-let cones =
-  let open OCADml in
-  let top =
-    Mesh.morph
-      ~refine:2
-      ~ez:(v2 0.42 0., v2 1. 1.)
-      ~slices:60
-      ~outer_map:`Tangent
-      ~height:3.
-      (Poly2.ring ~fn:5 ~thickness:(v2 0.5 0.5) (v2 4. 4.))
-      (Poly2.ring ~fn:80 ~thickness:(v2 0.2 0.2) (v2 1. 1.))
-  in
-  Mesh.(join [ ztrans 2. top; ztrans (-2.) @@ xrot Float.pi top ])
-  |> Mesh.scale (v3 0.6 0.6 0.6)
-  |> Mesh.rev_faces
-  |> Mesh.triangulate
-
-let ocadml_mesh (om : OCADml.Mesh.t) =
-  let mesh = Mesh.create () in
-  let n_faces = List.length @@ OCADml.Mesh.faces om in
-  let n_verts = n_faces * 3 in
-  let verts = CArray.make Ctypes.float (n_verts * 3)
-  and norms = CArray.make Ctypes.float (n_verts * 3)
-  and tex = CArray.make Ctypes.float (n_verts * 2)
-  and ps = Array.of_list @@ OCADml.Mesh.points om in
-  let add_face s face =
-    let open OCADml in
-    let poly = List.map (fun i -> ps.(i)) face in
-    let norm = Path3.normal poly in
-    let vert0 = s * 3 * 3
-    and tex0 = s * 3 * 2 in
-    List.iteri
-      CArray.(
-        fun j p ->
-          let i = vert0 + (j * 3)
-          and tx = tex0 + (j * 2) in
-          let tx_x = (if s mod 2 = 0 then 0. else 0.5) +. (Float.of_int j *. 0.25)
-          and tx_y = if j = 1 then 0.5 else 0. in
-          set verts i (V3.x p);
-          set verts (i + 1) (V3.y p);
-          set verts (i + 2) (V3.z p);
-          set norms i (V3.x norm);
-          set norms (i + 1) (V3.y norm);
-          set norms (i + 2) (V3.z norm);
-          set tex tx tx_x;
-          set tex (tx + 1) tx_y )
-      poly
-  in
-  List.iteri add_face @@ OCADml.Mesh.faces om;
-  Mesh.set_triangle_count mesh n_faces;
-  Mesh.set_vertex_count mesh n_verts;
-  Mesh.set_vertices mesh verts;
-  Mesh.set_normals mesh norms;
-  Mesh.set_texcoords mesh tex;
-  upload_mesh (addr mesh) false;
-  mesh
 
 let setup () =
   (* set_config_flags [ ConfigFlags.Msaa_4x_hint; ConfigFlags.Window_resizable ]; *)
   init_window 800 450 "raylib - OCADml mesh generation";
-  let shader =
-    (* load_shader "resources/base_lighting_instanced.vs" "resources/lighting.fs" *)
-    load_shader "bin/resources/lighting.vs" "bin/resources/lighting.fs"
-  in
-  if Shader.id shader = Unsigned.UInt.zero then failwith "Shader failed to compile";
-  let view_pos = get_shader_location shader "viewPos" in
-  let ambient = get_shader_location shader "ambient" in
-  let ambient_vec = Vector4.create 0.2 0.2 0.2 1.0 in
-  set_shader_value shader ambient (to_voidp (addr ambient_vec)) ShaderUniformDataType.Vec4;
+  let lighting = Meshviz.Lighting.load () in
+  Lighting.set_ambient lighting (Vector4.create 0.2 0.2 0.2 1.0);
   let light =
     Rlights.create_light
       Rlights.Point
       (Vector3.create 0.0 (-20.0) 0.0)
       (Vector3.zero ())
       Color.white
-      shader
+      lighting.shader
   in
   let checked = gen_image_checked 2 2 1 1 Color.blue Color.blue in
   let texture = load_texture_from_image checked in
   unload_image checked;
   let models =
-    [| load_model_from_mesh (ocadml_mesh cones)
-     ; load_model_from_mesh (ocadml_mesh sweep)
-     ; load_model_from_mesh (ocadml_mesh ring)
+    [| load_model_from_mesh (ocadml_mesh Examples.cones)
+     ; load_model_from_mesh (ocadml_mesh Examples.sweep)
+     ; load_model_from_mesh (ocadml_mesh Examples.ring)
     |]
   in
-  (* let material = load_material_default () in *)
-  (* Material.set_shader material shader; *)
-  (* MaterialMap.set_color (CArray.get (Material.maps material) 0) Color.red; *)
   Array.iter
     (fun model ->
       let mat = get Model.materials 0 model in
-      Material.set_shader mat shader;
+      Material.set_shader mat lighting.shader;
       (* MaterialMap.set_color (CArray.get (Material.maps mat) 0) Color.blue; *)
       MaterialMap.set_texture
         (get Material.maps MaterialMapIndex.(to_int Albedo) mat)
@@ -156,13 +48,13 @@ let setup () =
   (* set_camera_mode camera CameraMode.Free; *)
   set_target_fps 60;
   Printf.printf "\nlight created (enabled = %b)\n%!" light.enabled;
-  texture, shader, models, camera, position, view_pos, ref 0
+  texture, lighting, models, camera, position, ref 0
 
-let rec loop ((texture, shader, models, camera, position, view_pos, curr_model) as args) =
+let rec loop ((texture, lighting, models, camera, position, curr_model) as args) =
   if window_should_close ()
   then (
     unload_texture texture;
-    unload_shader shader;
+    Lighting.unload lighting;
     Array.iter unload_model models;
     close_window () )
   else (
@@ -173,13 +65,7 @@ let rec loop ((texture, shader, models, camera, position, view_pos, curr_model) 
     then
       curr_model := if !curr_model < 1 then Array.length models - 1 else !curr_model - 1;
     let cpos = Camera3D.position camera in
-    let pos = Vector3.(create (x cpos) (y cpos) (z cpos)) in
-    let mat = get Model.materials 0 (Array.get models !curr_model) in
-    set_shader_value
-      (Material.shader mat)
-      view_pos
-      (pos |> addr |> to_voidp)
-      ShaderUniformDataType.Vec3;
+    Lighting.set_view_pos lighting Vector3.(create (x cpos) (y cpos) (z cpos));
     begin_drawing ();
     clear_background Color.raywhite;
     begin_mode_3d camera;

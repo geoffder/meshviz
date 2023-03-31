@@ -1,5 +1,7 @@
 (lang dune 3.7)
 
+(using dune_site 0.1)
+
 (name meshviz)
 
 (generate_opam_files true)
@@ -17,6 +19,8 @@
 
 (package
  (name meshviz)
+ (sites
+  (share shaders))
  (synopsis "Mesh visualization tool")
  (description "Mesh visualization tool")
  (depends
