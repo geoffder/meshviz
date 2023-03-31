@@ -7,10 +7,10 @@ let setup () =
   (* set_config_flags [ ConfigFlags.Msaa_4x_hint; ConfigFlags.Window_resizable ]; *)
   init_window 800 450 "raylib - OCADml mesh generation";
   let lighting = Meshviz.Lighting.load () in
-  Lighting.set_ambient lighting (Vector4.create 0.2 0.2 0.2 1.0);
+  Lighting.set_ambient lighting (Vector4.create 0.4 0.4 0.4 1.0);
   let light =
     Rlights.create_light
-      Rlights.Point
+      Rlights.Directional
       (Vector3.create 0.0 (-20.0) 0.0)
       (Vector3.zero ())
       Color.white
@@ -47,10 +47,9 @@ let setup () =
   set_camera_mode camera CameraMode.Orbital;
   (* set_camera_mode camera CameraMode.Free; *)
   set_target_fps 60;
-  Printf.printf "\nlight created (enabled = %b)\n%!" light.enabled;
-  texture, lighting, models, camera, position, ref 0
+  texture, lighting, light, models, camera, position, ref 0
 
-let rec loop ((texture, lighting, models, camera, position, curr_model) as args) =
+let rec loop ((texture, lighting, light, models, camera, position, curr_model) as args) =
   if window_should_close ()
   then (
     unload_texture texture;
@@ -65,7 +64,13 @@ let rec loop ((texture, lighting, models, camera, position, curr_model) as args)
     then
       curr_model := if !curr_model < 1 then Array.length models - 1 else !curr_model - 1;
     let cpos = Camera3D.position camera in
+    (* let _pp = Vector3.multiply cpos (Vector3.create 0.9 0.9 0.9) in *)
     Lighting.set_view_pos lighting Vector3.(create (x cpos) (y cpos) (z cpos));
+    (* why do I have to negate the light positions to make it work like I expect? *)
+    Rlights.set_position
+      light
+      lighting.shader
+      Vector3.(OCADml.v3 (-.x cpos) (-.y cpos) (-.z cpos));
     begin_drawing ();
     clear_background Color.raywhite;
     begin_mode_3d camera;
