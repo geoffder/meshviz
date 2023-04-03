@@ -20,12 +20,6 @@ let setup () =
       let mat = get Model.materials 0 model in
       Material.set_shader mat (Lighting.shader lighting);
       MaterialMap.set_color (CArray.get (Material.maps mat) 0) Color.blue;
-      (* Setting these won't do anything since the lighting shader is not
-            taking them into account. *)
-      (* MaterialMap.set_value *)
-      (*   (get Material.maps MaterialMapIndex.(to_int Metalness) mat) *)
-      (*   1.0; *)
-      (* MaterialMap.set_value (get Material.maps MaterialMapIndex.(to_int Roughness) mat) 0.; *)
       Model.set_materials model (CArray.of_list Material.t [ mat ]) )
     models;
   let camera =
