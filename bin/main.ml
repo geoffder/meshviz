@@ -42,6 +42,11 @@ let setup () =
   set_target_fps 60;
   texture, lighting, models, camera, position, ref 0
 
+let orient_light lighting camera =
+  let cpos = Camera3D.position camera in
+  Lighting.set_view_pos lighting Vector3.(create (x cpos) (y cpos) (z cpos));
+  Lighting.set_light_position lighting 0 Vector3.(create (-.x cpos) (-.y cpos) (-.z cpos))
+
 let rec loop ((texture, lighting, models, camera, position, curr_model) as args) =
   if window_should_close ()
   then (
@@ -56,13 +61,7 @@ let rec loop ((texture, lighting, models, camera, position, curr_model) as args)
     if is_key_pressed Key.Left
     then
       curr_model := if !curr_model < 1 then Array.length models - 1 else !curr_model - 1;
-    let cpos = Camera3D.position camera in
-    Lighting.set_view_pos lighting Vector3.(create (x cpos) (y cpos) (z cpos));
-    (* why do I have to negate the light positions to make it work like I expect? *)
-    Lighting.set_light_position
-      lighting
-      0
-      Vector3.(create (-.x cpos) (-.y cpos) (-.z cpos));
+    orient_light lighting camera;
     begin_drawing ();
     clear_background Color.raywhite;
     begin_mode_3d camera;
