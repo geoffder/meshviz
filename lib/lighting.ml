@@ -57,30 +57,26 @@ module Light = struct
       ShaderUniformDataType.Vec4
 
   let make typ position target color shader =
-    if !n_lights > max_lights
-    then failwith "Too many lights"
-    else (
-      let enabled_name = Printf.sprintf "lights[%i].enabled" !n_lights in
-      let typ_name = Printf.sprintf "lights[%i].type" !n_lights in
-      let pos_name = Printf.sprintf "lights[%i].position" !n_lights in
-      let target_name = Printf.sprintf "lights[%i].target" !n_lights in
-      let color_name = Printf.sprintf "lights[%i].color" !n_lights in
-      let light =
-        { enabled = true
-        ; typ
-        ; position
-        ; target
-        ; color
-        ; loc_enabled = get_shader_location shader enabled_name
-        ; loc_typ = get_shader_location shader typ_name
-        ; loc_pos = get_shader_location shader pos_name
-        ; loc_target = get_shader_location shader target_name
-        ; loc_color = get_shader_location shader color_name
-        }
-      in
-      update_values shader light;
-      n_lights := !n_lights + 1;
-      light )
+    let enabled_name = Printf.sprintf "lights[%i].enabled" !n_lights in
+    let typ_name = Printf.sprintf "lights[%i].type" !n_lights in
+    let pos_name = Printf.sprintf "lights[%i].position" !n_lights in
+    let target_name = Printf.sprintf "lights[%i].target" !n_lights in
+    let color_name = Printf.sprintf "lights[%i].color" !n_lights in
+    let light =
+      { enabled = true
+      ; typ
+      ; position
+      ; target
+      ; color
+      ; loc_enabled = get_shader_location shader enabled_name
+      ; loc_typ = get_shader_location shader typ_name
+      ; loc_pos = get_shader_location shader pos_name
+      ; loc_target = get_shader_location shader target_name
+      ; loc_color = get_shader_location shader color_name
+      }
+    in
+    update_values shader light;
+    light
 
   let set_position t shader p =
     Vector3.set_x t.position (Vector3.x p);
@@ -122,9 +118,12 @@ let set_view_pos t v =
 let light_count () = !n_lights
 
 let create_light ?(typ = `Directional) ?(target = Vector3.zero ()) ~pos ~color t =
-  let light = Light.make typ pos target color t.shader in
-  t.lights.(!n_lights) <- Some light;
-  n_lights := !n_lights + 1
+  if !n_lights > max_lights
+  then failwith "Too many lights"
+  else (
+    let light = Light.make typ pos target color t.shader in
+    t.lights.(!n_lights) <- Some light;
+    n_lights := !n_lights + 1 )
 
 let set_light_position t i pos =
   Option.iter (fun l -> Light.set_position l t.shader pos) t.lights.(i)
