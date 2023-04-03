@@ -7,11 +7,8 @@ let setup () =
   (* set_config_flags [ ConfigFlags.Msaa_4x_hint; ConfigFlags.Window_resizable ]; *)
   init_window 800 450 "raylib - OCADml mesh generation";
   let lighting = Meshviz.Lighting.load () in
-  Lighting.set_ambient lighting (Vector4.create 0.4 0.4 0.4 1.0);
+  Lighting.set_ambient lighting (Vector4.create 0.2 0.2 0.2 1.0);
   Lighting.create_light ~pos:(Vector3.create 0.0 (-20.0) 0.0) ~color:Color.white lighting;
-  let checked = gen_image_checked 2 2 1 1 Color.blue Color.blue in
-  let texture = load_texture_from_image checked in
-  unload_image checked;
   let models =
     [| load_model_from_mesh (ocadml_mesh Examples.cones)
      ; load_model_from_mesh (ocadml_mesh Examples.sweep)
@@ -22,10 +19,13 @@ let setup () =
     (fun model ->
       let mat = get Model.materials 0 model in
       Material.set_shader mat (Lighting.shader lighting);
-      (* MaterialMap.set_color (CArray.get (Material.maps mat) 0) Color.blue; *)
-      MaterialMap.set_texture
-        (get Material.maps MaterialMapIndex.(to_int Albedo) mat)
-        texture;
+      MaterialMap.set_color (CArray.get (Material.maps mat) 0) Color.blue;
+      (* Setting these won't do anything since the lighting shader is not
+            taking them into account. *)
+      (* MaterialMap.set_value *)
+      (*   (get Material.maps MaterialMapIndex.(to_int Metalness) mat) *)
+      (*   1.0; *)
+      (* MaterialMap.set_value (get Material.maps MaterialMapIndex.(to_int Roughness) mat) 0.; *)
       Model.set_materials model (CArray.of_list Material.t [ mat ]) )
     models;
   let camera =
@@ -40,17 +40,16 @@ let setup () =
   set_camera_mode camera CameraMode.Orbital;
   (* set_camera_mode camera CameraMode.Free; *)
   set_target_fps 60;
-  texture, lighting, models, camera, position, ref 0
+  lighting, models, camera, position, ref 0
 
 let orient_light lighting camera =
   let cpos = Camera3D.position camera in
   Lighting.set_view_pos lighting Vector3.(create (x cpos) (y cpos) (z cpos));
   Lighting.set_light_position lighting 0 Vector3.(create (-.x cpos) (-.y cpos) (-.z cpos))
 
-let rec loop ((texture, lighting, models, camera, position, curr_model) as args) =
+let rec loop ((lighting, models, camera, position, curr_model) as args) =
   if window_should_close ()
   then (
-    unload_texture texture;
     Lighting.unload lighting;
     Array.iter unload_model models;
     close_window () )
