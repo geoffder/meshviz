@@ -1,4 +1,5 @@
 open Raylib
+open Tgl4
 
 let n_lights = ref 0
 let max_lights = 4
@@ -156,7 +157,6 @@ module Skybox = struct
     setup_constant_vals shader "environmentMap" 0;
     set_shader_value_matrix shader projection default_proj;
     (* TODO: skybox texture? *)
-    (* TODO: framebuffer? *)
     { shader; view_pos; resolution }
 
   let unload t = unload_shader t.shader
@@ -166,43 +166,60 @@ end
 type t =
   { pbr : Pbr.t
   ; skybox : Skybox.t
-  ; cubemap_id : Unsigned.UInt.t
-  ; irradiance_id : Unsigned.UInt.t
-  ; prefilter_id : Unsigned.UInt.t
-  ; brdf_id : Unsigned.UInt.t
+      (* ; cubemap_id : Unsigned.UInt.t *)
+      (* ; irradiance_id : Unsigned.UInt.t *)
+      (* ; prefilter_id : Unsigned.UInt.t *)
+      (* ; brdf_id : Unsigned.UInt.t *)
   ; lights : Light.t option array
   }
 
 let load () =
   let pbr = Pbr.load ()
   and skybox = Skybox.load () in
+  ignore (skybox.resolution, skybox.view_pos);
   (* shaders *)
-  let cube_shader = load_shader "cubemap.vert" "cubemap.frag"
+  let cubemap_shader = load_shader "cubemap.vert" "cubemap.frag"
   and irradiance_shader = load_shader "skybox.vert" "irradiance.frag"
-  and prefilter_shader = load_shader "skybox.vert" "prefilter.frag"
-  and brdf_shader = load_shader "brdf.vert" "brdf.frag" in
+  and prefilter_shader = load_shader "skybox.vert" "prefilter.frag" in
+  (* temp constants (arguments to LoadEnvironment) *)
+  let cubemap_size = 1024
+  and _irradiance_size = 32
+  and _prefiltered_size = 256
+  and _brdf_size = 512 in
+  (* and brdf_shader = load_shader "brdf.vert" "brdf.frag" in *)
   (* locations *)
-  let cube_projection = get_shader_location cube_shader "projection"
-  and cube_view = get_shader_location cube_shader "view"
-  and irradiance_projection = get_shader_location irradiance_shader "projection"
-  and irradiance_view = get_shader_location irradiance_shader "view"
-  and prefilter_projection = get_shader_location prefilter_shader "projection"
-  and prefilter_view = get_shader_location prefilter_shader "view"
-  and prefilter_roughness = get_shader_location prefilter_shader "view" in
+  (* let cubemap_projection = get_shader_location cubemap_shader "projection" *)
+  (* and cubemap_view = get_shader_location cubemap_shader "view" *)
+  (* and irradiance_projection = get_shader_location irradiance_shader "projection" *)
+  (* and irradiance_view = get_shader_location irradiance_shader "view" *)
+  (* and prefilter_projection = get_shader_location prefilter_shader "projection" *)
+  (* and prefilter_view = get_shader_location prefilter_shader "view" *)
+  (* and prefilter_roughness = get_shader_location prefilter_shader "view" in *)
   (* setup constants *)
-  setup_constant_vals cube_shader "equirectangularMap" 0;
+  setup_constant_vals cubemap_shader "equirectangularMap" 0;
   setup_constant_vals irradiance_shader "environmentMap" 0;
   setup_constant_vals prefilter_shader "environmentMap" 0;
   (* setup depth face culling and cube map seamless *)
-  Rlgl.disable_backface_culling ();
-  (* probably wrong (glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS))*)
-  (* TODO: seems like not everything I need from GL is actually bound/exposed
-    through rlgl (including on the C side). May need to use tlgs or another
-    opengl OCaml bindings library in order to port the PBR example more fully *)
-  Rlgl.enable_texture_cubemap (Unsigned.UInt.of_int 0);
-  Rlgl.enable_depth_test ();
-  Rlgl.set_line_width 2.;
+  Gl.(enable texture_cube_map_seamless);
+  Gl.(depth_func lequal);
+  Gl.(disable cull_face_mode);
+  Gl.line_width 2.;
+  (* setup framebuffer for skybox *)
+  let capture_fbo = Bigarray.(Array1.create int32 c_layout 1)
+  and capture_rbo = Bigarray.(Array1.create int32 c_layout 1) in
+  let fbo_val = Int32.to_int @@ Bigarray.Array1.get capture_fbo 0
+  and rbo_val = Int32.to_int @@ Bigarray.Array1.get capture_rbo 0 in
+  Gl.gen_framebuffers 1 capture_fbo;
+  Gl.gen_renderbuffers 1 capture_rbo;
+  Gl.(bind_framebuffer framebuffer fbo_val);
+  Gl.(bind_renderbuffer renderbuffer rbo_val);
+  Gl.(renderbuffer_storage renderbuffer depth_component24 cubemap_size cubemap_size);
+  Gl.(framebuffer_renderbuffer framebuffer depth_attachment renderbuffer rbo_val);
+  (* setup cubemap to render and attach to framebuffer *)
   { pbr; skybox; lights = Array.make max_lights None }
+
+let pbr_shader t = Pbr.shader t.pbr
+let skybox_shader t = Skybox.shader t.skybox
 
 let unload t =
   Pbr.unload t.pbr;
@@ -214,9 +231,12 @@ let create_light ?(typ = `Directional) ?(target = Vector3.zero ()) ~pos ~color t
   if !n_lights > max_lights
   then failwith "Too many lights"
   else (
-    let light = Light.make typ pos target color t.shader in
+    let light = Light.make typ pos target color t.pbr.shader in
     t.lights.(!n_lights) <- Some light;
     n_lights := !n_lights + 1 )
 
 let set_light_position t i pos =
-  Option.iter (fun l -> Light.set_position l t.shader pos) t.lights.(i)
+  Option.iter (fun l -> Light.set_position l t.pbr.shader pos) t.lights.(i)
+
+let set_render_mode t i = Pbr.set_render_mode t.pbr i
+let set_view_pos t p = Pbr.set_view_pos t.pbr p

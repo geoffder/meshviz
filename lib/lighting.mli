@@ -6,7 +6,8 @@ val load : unit -> t
 val unload : t -> unit
 val set_render_mode : t -> int -> unit
 val set_view_pos : t -> Vector3.t -> unit
-val shader : t -> Shader.t
+val pbr_shader : t -> Shader.t
+val skybox_shader : t -> Shader.t
 val max_lights : int
 val light_count : unit -> int
 

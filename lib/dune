@@ -1,9 +1,21 @@
 (library
  (name meshviz)
- (libraries OCADml raylib dune-site))
+ (libraries OCADml tgls raylib dune-site))
 
 (install
- (files "resources/lighting.vert" "resources/lighting.frag")
+ (files
+  "resources/pbr.vert"
+  "resources/pbr.frag"
+  "resources/brdf.vert"
+  "resources/brdf.frag"
+  "resources/skybox.vert"
+  "resources/skybox.frag"
+  "resources/cubemap.vert"
+  "resources/cubemap.frag"
+  "resources/postfx.vert"
+  "resources/postfx.frag"
+  "resources/irradiance.frag"
+  "resources/prefilter.frag")
  (section
   (site
    (meshviz shaders))))
