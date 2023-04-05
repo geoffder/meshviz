@@ -4,7 +4,7 @@ type t
 
 val load : unit -> t
 val unload : t -> unit
-val set_ambient : t -> Vector4.t -> unit
+val set_render_mode : t -> int -> unit
 val set_view_pos : t -> Vector3.t -> unit
 val shader : t -> Shader.t
 val max_lights : int

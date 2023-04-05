@@ -7,7 +7,7 @@ let setup () =
   (* set_config_flags [ ConfigFlags.Msaa_4x_hint; ConfigFlags.Window_resizable ]; *)
   init_window 800 450 "raylib - OCADml mesh generation";
   let lighting = Meshviz.Lighting.load () in
-  Lighting.set_ambient lighting (Vector4.create 0.2 0.2 0.2 1.0);
+  (* Lighting.set_ambient lighting (Vector4.create 0.2 0.2 0.2 1.0); *)
   Lighting.create_light ~pos:(Vector3.create 0.0 (-20.0) 0.0) ~color:Color.white lighting;
   let models =
     [| load_model_from_mesh (ocadml_mesh Examples.cones)
