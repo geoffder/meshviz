@@ -148,7 +148,7 @@ type t =
   { pbr : Pbr.t
   ; skybox : Skybox.t
   ; cubemap_id : Gl.uint32_bigarray
-      (* ; irradiance_id : Unsigned.UInt.t *)
+  ; irradiance_id : Gl.uint32_bigarray
       (* ; prefilter_id : Unsigned.UInt.t *)
       (* ; brdf_id : Unsigned.UInt.t *)
   ; lights : Light.t option array
@@ -164,15 +164,17 @@ let load () =
   and prefilter_shader = load_shader "skybox.vert" "prefilter.frag" in
   (* temp constants (arguments to LoadEnvironment) *)
   let cubemap_size = 1024
-  and _irradiance_size = 32
+  and irradiance_size = 32
   and _prefiltered_size = 256
   and _brdf_size = 512 in
   (* and brdf_shader = load_shader "brdf.vert" "brdf.frag" in *)
   (* locations *)
   let cubemap_projection = get_shader_location cubemap_shader "projection"
-  and cubemap_view = get_shader_location cubemap_shader "view" in
-  (* and irradiance_projection = get_shader_location irradiance_shader "projection" *)
-  (* and irradiance_view = get_shader_location irradiance_shader "view" *)
+  and cubemap_view = get_shader_location cubemap_shader "view"
+  and cubemap_id = create_uint32_bigarray 1
+  and irradiance_projection = get_shader_location irradiance_shader "projection"
+  and irradiance_view = get_shader_location irradiance_shader "view"
+  and irradiance_id = create_uint32_bigarray 1 in
   (* and prefilter_projection = get_shader_location prefilter_shader "projection" *)
   (* and prefilter_view = get_shader_location prefilter_shader "view" *)
   (* and prefilter_roughness = get_shader_location prefilter_shader "view" in *)
@@ -201,7 +203,6 @@ let load () =
       (uint32_bigarray_get capture_rbo 0) );
   (* setup cubemap to render and attach to framebuffer *)
   (* NOTE: faces are stored with 16bit floating point values *)
-  let cubemap_id = create_uint32_bigarray 1 in
   Gl.(gen_textures 1 cubemap_id);
   Gl.(bind_texture texture_cube_map (uint32_bigarray_get capture_fbo 0));
   for i = 0 to 5 do
@@ -242,7 +243,44 @@ let load () =
     Gl.(clear (color_buffer_bit lor depth_buffer_bit));
     RenderCube.render ()
   done;
-  { pbr; skybox; cubemap_id; lights = Array.make max_lights None }
+  (* unbind framebuffer and textures *)
+  Gl.(bind_framebuffer framebuffer 0);
+  (* create an irradiance cubemap, and re-scale capture FBO to irradiance scale *)
+  Gl.(gen_textures 1 irradiance_id);
+  Gl.(bind_texture texture_cube_map (uint32_bigarray_get irradiance_id 0));
+  for i = 0 to 5 do
+    let null = `Data (create_uint32_bigarray 0)
+    and target = Gl.texture_cube_map_positive_x + i in
+    Gl.(tex_image2d target 0 rgb16f irradiance_size irradiance_size 0 rgb float null)
+  done;
+  Gl.(tex_parameteri texture_cube_map texture_wrap_s clamp_to_edge);
+  Gl.(tex_parameteri texture_cube_map texture_wrap_t clamp_to_edge);
+  Gl.(tex_parameteri texture_cube_map texture_wrap_r clamp_to_edge);
+  Gl.(tex_parameteri texture_cube_map texture_min_filter linear);
+  Gl.(tex_parameteri texture_cube_map texture_mag_filter linear);
+  Gl.(bind_framebuffer framebuffer (uint32_bigarray_get capture_fbo 0));
+  Gl.(bind_renderbuffer renderbuffer (uint32_bigarray_get capture_rbo 0));
+  Gl.(renderbuffer_storage renderbuffer depth_component24 irradiance_size irradiance_size);
+  (* solve diffuse integral by convolution to creat and irradiance cubemap *)
+  Gl.(use_program (Unsigned.UInt.to_int @@ Shader.id irradiance_shader));
+  Gl.(active_texture texture0);
+  Gl.(bind_texture texture_cube_map (uint32_bigarray_get cubemap_id 0));
+  set_shader_value_matrix irradiance_shader irradiance_projection capture_projection;
+  (* NOTE: don't forget to configure the viewport to the capture dimensions *)
+  Gl.(viewport 0 0 irradiance_size irradiance_size);
+  Gl.(bind_framebuffer framebuffer (uint32_bigarray_get capture_fbo 0));
+  for i = 0 to 5 do
+    let target = Gl.texture_cube_map_positive_x + i
+    and id = uint32_bigarray_get irradiance_id 0 in
+    set_shader_value_matrix irradiance_shader irradiance_view capture_views.(i);
+    Gl.(framebuffer_texture2d framebuffer color_attachment0 target id 0);
+    Gl.(clear (color_buffer_bit lor depth_buffer_bit));
+    RenderCube.render ()
+  done;
+  (* unbind framebuffer and textures *)
+  Gl.(bind_framebuffer framebuffer 0);
+  (* create a prefiltered HDR environment map *)
+  { pbr; skybox; cubemap_id; irradiance_id; lights = Array.make max_lights None }
 
 let pbr_shader t = Pbr.shader t.pbr
 let skybox_shader t = Skybox.shader t.skybox
