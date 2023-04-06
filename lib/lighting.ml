@@ -137,7 +137,10 @@ module Skybox = struct
     set_shader_value_matrix shader projection default_proj;
     { shader; tex; view_pos; resolution }
 
-  let unload t = unload_shader t.shader
+  let unload t =
+    unload_texture t.tex;
+    unload_shader t.shader
+
   let shader t = t.shader
 end
 
