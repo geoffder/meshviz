@@ -1,4 +1,4 @@
 (executable
  (public_name meshviz)
  (name main)
- (libraries meshviz OCADml raylib))
+ (libraries meshviz OCADml raylib tgls.tgl4))

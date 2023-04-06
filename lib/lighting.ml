@@ -4,12 +4,16 @@ open Tgl4
 let n_lights = ref 0
 let max_lights = 4
 
-let path n =
+let shader_path n =
   let site = List.hd DuneSites.Sites.shaders in
   Filename.concat site n
 
+let texture_path n =
+  let site = List.hd DuneSites.Sites.textures in
+  Filename.concat site n
+
 let load_shader vert frag =
-  let shader = load_shader (path vert) (path frag) in
+  let shader = load_shader (shader_path vert) (shader_path frag) in
   if Shader.id shader = Unsigned.UInt.zero
   then (
     let name = Filename.remove_extension frag in
@@ -27,6 +31,9 @@ let setup_constant_vals shader loc_name i =
     CArray.(to_voidp (start @@ of_list Ctypes.int [ i ]))
     ShaderUniformDataType.Int
     1
+
+let create_uint32_bigarray n = Bigarray.(Array1.create int32 c_layout n)
+let uint32_bigarray_get a i = Int32.to_int @@ Bigarray.Array1.get a i
 
 module Light = struct
   type typ =
@@ -145,19 +152,20 @@ end
 module Skybox = struct
   type t =
     { shader : Shader.t
+    ; tex : Texture2D.t
     ; view_pos : int
     ; resolution : int
     }
 
   let load () =
-    let shader = load_shader "pbr.vert" "pbr.frag" in
+    let shader = load_shader "pbr.vert" "pbr.frag"
+    and tex = load_texture (texture_path "pinetree.hdr") in
     let view_pos = get_shader_location shader "view"
     and resolution = get_shader_location shader "resolution"
     and projection = get_shader_location shader "projection" in
     setup_constant_vals shader "environmentMap" 0;
     set_shader_value_matrix shader projection default_proj;
-    (* TODO: skybox texture? *)
-    { shader; view_pos; resolution }
+    { shader; tex; view_pos; resolution }
 
   let unload t = unload_shader t.shader
   let shader t = t.shader
@@ -166,7 +174,7 @@ end
 type t =
   { pbr : Pbr.t
   ; skybox : Skybox.t
-      (* ; cubemap_id : Unsigned.UInt.t *)
+  ; cubemap_id : Gl.uint32_bigarray
       (* ; irradiance_id : Unsigned.UInt.t *)
       (* ; prefilter_id : Unsigned.UInt.t *)
       (* ; brdf_id : Unsigned.UInt.t *)
@@ -188,8 +196,8 @@ let load () =
   and _brdf_size = 512 in
   (* and brdf_shader = load_shader "brdf.vert" "brdf.frag" in *)
   (* locations *)
-  (* let cubemap_projection = get_shader_location cubemap_shader "projection" *)
-  (* and cubemap_view = get_shader_location cubemap_shader "view" *)
+  let cubemap_projection = get_shader_location cubemap_shader "projection"
+  and cubemap_view = get_shader_location cubemap_shader "view" in
   (* and irradiance_projection = get_shader_location irradiance_shader "projection" *)
   (* and irradiance_view = get_shader_location irradiance_shader "view" *)
   (* and prefilter_projection = get_shader_location prefilter_shader "projection" *)
@@ -205,23 +213,70 @@ let load () =
   Gl.(disable cull_face_mode);
   Gl.line_width 2.;
   (* setup framebuffer for skybox *)
-  let capture_fbo = Bigarray.(Array1.create int32 c_layout 1)
-  and capture_rbo = Bigarray.(Array1.create int32 c_layout 1) in
-  let fbo_val = Int32.to_int @@ Bigarray.Array1.get capture_fbo 0
-  and rbo_val = Int32.to_int @@ Bigarray.Array1.get capture_rbo 0 in
+  let capture_fbo = create_uint32_bigarray 1
+  and capture_rbo = create_uint32_bigarray 1 in
   Gl.gen_framebuffers 1 capture_fbo;
   Gl.gen_renderbuffers 1 capture_rbo;
-  Gl.(bind_framebuffer framebuffer fbo_val);
-  Gl.(bind_renderbuffer renderbuffer rbo_val);
+  Gl.(bind_framebuffer framebuffer (uint32_bigarray_get capture_fbo 0));
+  Gl.(bind_renderbuffer renderbuffer (uint32_bigarray_get capture_rbo 0));
   Gl.(renderbuffer_storage renderbuffer depth_component24 cubemap_size cubemap_size);
-  Gl.(framebuffer_renderbuffer framebuffer depth_attachment renderbuffer rbo_val);
+  Gl.(
+    framebuffer_renderbuffer
+      framebuffer
+      depth_attachment
+      renderbuffer
+      (uint32_bigarray_get capture_rbo 0) );
   (* setup cubemap to render and attach to framebuffer *)
-  { pbr; skybox; lights = Array.make max_lights None }
+  (* NOTE: faces are stored with 16bit floating point values *)
+  let cubemap_id = create_uint32_bigarray 1 in
+  Gl.(gen_textures 1 cubemap_id);
+  Gl.(bind_texture texture_cube_map (uint32_bigarray_get capture_fbo 0));
+  for i = 0 to 5 do
+    let null = `Data (create_uint32_bigarray 0)
+    and target = Gl.texture_cube_map_positive_x + i in
+    Gl.(tex_image2d target 0 rgb16f cubemap_size cubemap_size 0 rgb float null)
+  done;
+  Gl.(tex_parameteri texture_cube_map texture_wrap_s clamp_to_edge);
+  Gl.(tex_parameteri texture_cube_map texture_wrap_t clamp_to_edge);
+  Gl.(tex_parameteri texture_cube_map texture_wrap_r clamp_to_edge);
+  Gl.(tex_parameteri texture_cube_map texture_min_filter linear);
+  Gl.(tex_parameteri texture_cube_map texture_mag_filter linear);
+  (* create projection (transposed) and different views for each face *)
+  let capture_projection = Matrix.transpose @@ Matrix.perspective 90. 1. 0.01 1000. in
+  let capture_views =
+    let v x y z = Vector3.create x y z in
+    [| Matrix.look_at (v 0. 0. 0.) (v 1. 0. 0.) (v 0. (-1.) 0.)
+     ; Matrix.look_at (v 0. 0. 0.) (v (-1.) 0. 0.) (v 0. (-1.) 0.)
+     ; Matrix.look_at (v 0. 0. 0.) (v 0. 1. 0.) (v 0. 0. 1.)
+     ; Matrix.look_at (v 0. 0. 0.) (v 0. (-1.) 0.) (v 0. 0. (-1.))
+     ; Matrix.look_at (v 0. 0. 0.) (v 0. 0. 1.) (v 0. (-1.) 0.)
+     ; Matrix.look_at (v 0. 0. 0.) (v 0. 0. (-1.)) (v 0. (-1.) 0.)
+    |]
+  in
+  (* convert HDR equirectangular environment map to cubemap equivalent *)
+  Gl.use_program (Unsigned.UInt.to_int @@ Shader.id cubemap_shader);
+  Gl.(active_texture texture0);
+  Gl.(bind_texture texture_2d (Unsigned.UInt.to_int @@ Texture2D.id skybox.tex));
+  set_shader_value_matrix cubemap_shader cubemap_projection capture_projection;
+  (* NOTE: don't forget to configure the viewport to the capture dimensions *)
+  Gl.(viewport 0 0 cubemap_size cubemap_size);
+  Gl.(bind_framebuffer framebuffer (uint32_bigarray_get capture_fbo 0));
+  for i = 0 to 5 do
+    let target = Gl.texture_cube_map_positive_x + i
+    and id = Int32.to_int @@ Bigarray.Array1.get cubemap_id 0 in
+    set_shader_value_matrix cubemap_shader cubemap_view capture_views.(i);
+    Gl.(framebuffer_texture2d framebuffer color_attachment0 target id 0);
+    Gl.(clear (color_buffer_bit lor depth_buffer_bit))
+    (* FIXME: need to write RenderCube() and call here *)
+  done;
+  { pbr; skybox; cubemap_id; lights = Array.make max_lights None }
 
 let pbr_shader t = Pbr.shader t.pbr
 let skybox_shader t = Skybox.shader t.skybox
 
 let unload t =
+  ignore t.cubemap_id;
+  (* avoid warning *)
   Pbr.unload t.pbr;
   Skybox.unload t.skybox
 

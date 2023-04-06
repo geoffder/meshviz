@@ -13,6 +13,7 @@ depends: [
   "dune" {>= "3.7"}
   "gg" {>= "1.0.0"}
   "OCADml" {>= "0.4.0"}
+  "tgls.tgl4"
   "raylib"
   "odoc" {with-doc}
 ]

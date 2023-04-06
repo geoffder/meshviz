@@ -1,24 +1,30 @@
 (library
  (name meshviz)
- (libraries OCADml tgls raylib dune-site))
+ (libraries OCADml tgls.tgl4 raylib dune-site))
 
 (install
  (files
-  "resources/pbr.vert"
-  "resources/pbr.frag"
-  "resources/brdf.vert"
-  "resources/brdf.frag"
-  "resources/skybox.vert"
-  "resources/skybox.frag"
-  "resources/cubemap.vert"
-  "resources/cubemap.frag"
-  "resources/postfx.vert"
-  "resources/postfx.frag"
-  "resources/irradiance.frag"
-  "resources/prefilter.frag")
+  "resources/shaders/pbr.vert"
+  "resources/shaders/pbr.frag"
+  "resources/shaders/brdf.vert"
+  "resources/shaders/brdf.frag"
+  "resources/shaders/skybox.vert"
+  "resources/shaders/skybox.frag"
+  "resources/shaders/cubemap.vert"
+  "resources/shaders/cubemap.frag"
+  "resources/shaders/postfx.vert"
+  "resources/shaders/postfx.frag"
+  "resources/shaders/irradiance.frag"
+  "resources/shaders/prefilter.frag")
  (section
   (site
    (meshviz shaders))))
+
+(install
+ (files "resources/textures/hdr/pinetree.hdr")
+ (section
+  (site
+   (meshviz textures))))
 
 (generate_sites_module
  (module DuneSites)

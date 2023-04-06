@@ -20,7 +20,8 @@
 (package
  (name meshviz)
  (sites
-  (share shaders))
+  (share shaders)
+  (share textures))
  (synopsis "Mesh visualization tool")
  (description "Mesh visualization tool")
  (depends
@@ -31,4 +32,5 @@
    (>= 1.0.0))
   (OCADml
    (>= 0.4.0))
+  tgls.tgl4
   raylib))
