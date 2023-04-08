@@ -4,6 +4,7 @@ open Utils
 
 let n_lights = ref 0
 let max_lights = 4
+let max_mipmap_levels = 5
 
 module Light = struct
   type typ =
@@ -149,8 +150,8 @@ type t =
   ; skybox : Skybox.t
   ; cubemap_id : Gl.uint32_bigarray
   ; irradiance_id : Gl.uint32_bigarray
-      (* ; prefilter_id : Unsigned.UInt.t *)
-      (* ; brdf_id : Unsigned.UInt.t *)
+  ; prefilter_id : Gl.uint32_bigarray
+  ; brdf_id : Gl.uint32_bigarray
   ; lights : Light.t option array
   }
 
@@ -161,23 +162,25 @@ let load () =
   (* shaders *)
   let cubemap_shader = load_shader "cubemap.vert" "cubemap.frag"
   and irradiance_shader = load_shader "skybox.vert" "irradiance.frag"
-  and prefilter_shader = load_shader "skybox.vert" "prefilter.frag" in
+  and prefilter_shader = load_shader "skybox.vert" "prefilter.frag"
+  and brdf_shader = load_shader "brdf.vert" "brdf.frag" in
   (* temp constants (arguments to LoadEnvironment) *)
   let cubemap_size = 1024
   and irradiance_size = 32
-  and _prefiltered_size = 256
-  and _brdf_size = 512 in
-  (* and brdf_shader = load_shader "brdf.vert" "brdf.frag" in *)
+  and prefilter_size = 256
+  and brdf_size = 512 in
   (* locations *)
   let cubemap_projection = get_shader_location cubemap_shader "projection"
   and cubemap_view = get_shader_location cubemap_shader "view"
   and cubemap_id = create_uint32_bigarray 1
   and irradiance_projection = get_shader_location irradiance_shader "projection"
   and irradiance_view = get_shader_location irradiance_shader "view"
-  and irradiance_id = create_uint32_bigarray 1 in
-  (* and prefilter_projection = get_shader_location prefilter_shader "projection" *)
-  (* and prefilter_view = get_shader_location prefilter_shader "view" *)
-  (* and prefilter_roughness = get_shader_location prefilter_shader "view" in *)
+  and irradiance_id = create_uint32_bigarray 1
+  and prefilter_projection = get_shader_location prefilter_shader "projection"
+  and prefilter_view = get_shader_location prefilter_shader "view"
+  and prefilter_roughness = get_shader_location prefilter_shader "view"
+  and prefilter_id = create_uint32_bigarray 1
+  and brdf_id = create_uint32_bigarray 1 in
   (* setup constants *)
   setup_constant_vals cubemap_shader "equirectangularMap" 0;
   setup_constant_vals irradiance_shader "environmentMap" 0;
@@ -280,7 +283,57 @@ let load () =
   (* unbind framebuffer and textures *)
   Gl.(bind_framebuffer framebuffer 0);
   (* create a prefiltered HDR environment map *)
-  { pbr; skybox; cubemap_id; irradiance_id; lights = Array.make max_lights None }
+  Gl.(use_program (Unsigned.UInt.to_int @@ Shader.id prefilter_shader));
+  Gl.(active_texture texture0);
+  Gl.(bind_texture texture_cube_map (uint32_bigarray_get cubemap_id 0));
+  set_shader_value_matrix prefilter_shader prefilter_projection capture_projection;
+  Gl.(bind_framebuffer framebuffer (uint32_bigarray_get capture_fbo 0));
+  for mip = 0 to max_mipmap_levels - 1 do
+    let mip_wh = Float.(to_int @@ (of_int prefilter_size *. (0.5 ** of_int mip)))
+    and roughness = Float.(of_int mip /. of_int (max_mipmap_levels - 1)) in
+    Gl.(bind_renderbuffer renderbuffer (uint32_bigarray_get capture_rbo 0));
+    Gl.(renderbuffer_storage renderbuffer depth_component24 mip_wh mip_wh);
+    Gl.(viewport 0 0 mip_wh mip_wh);
+    Gl.(uniform1f prefilter_roughness roughness);
+    for i = 0 to 5 do
+      let target = Gl.texture_cube_map_positive_x + i
+      and id = uint32_bigarray_get prefilter_id 0 in
+      set_shader_value_matrix prefilter_shader prefilter_view capture_views.(i);
+      Gl.(framebuffer_texture2d framebuffer color_attachment0 target id mip);
+      Gl.(clear (color_buffer_bit lor depth_buffer_bit));
+      RenderCube.render ()
+    done
+  done;
+  (* unbind framebuffer and textures *)
+  Gl.(bind_framebuffer framebuffer 0);
+  (* generate BRDF convolution texture *)
+  Gl.(gen_textures 1 brdf_id);
+  Gl.(bind_texture texture_2d (uint32_bigarray_get brdf_id 0));
+  Gl.(tex_image2d texture_2d 0 rgb16f brdf_size brdf_size 0 rg float (`Offset 0));
+  Gl.(tex_parameteri texture_2d texture_wrap_s clamp_to_edge);
+  Gl.(tex_parameteri texture_2d texture_wrap_t clamp_to_edge);
+  Gl.(tex_parameteri texture_2d texture_min_filter linear);
+  Gl.(tex_parameteri texture_2d texture_mag_filter linear);
+  (* render BRDF LUT into a quad using default FBO *)
+  Gl.(bind_framebuffer framebuffer (uint32_bigarray_get capture_fbo 0));
+  Gl.(bind_renderbuffer renderbuffer (uint32_bigarray_get capture_rbo 0));
+  Gl.(renderbuffer_storage renderbuffer depth_component24 brdf_size brdf_size);
+  let id = uint32_bigarray_get brdf_id 0 in
+  Gl.(framebuffer_texture2d framebuffer color_attachment0 texture_2d id 0);
+  Gl.(viewport 0 0 brdf_size brdf_size);
+  Gl.use_program (Unsigned.UInt.to_int @@ Shader.id brdf_shader);
+  Gl.(clear (color_buffer_bit lor depth_buffer_bit));
+  (* TODO: RenderQuad() *)
+  (* unbind framebuffer and textures *)
+  Gl.(bind_framebuffer framebuffer 0);
+  { pbr
+  ; skybox
+  ; cubemap_id
+  ; irradiance_id
+  ; prefilter_id
+  ; brdf_id
+  ; lights = Array.make max_lights None
+  }
 
 let pbr_shader t = Pbr.shader t.pbr
 let skybox_shader t = Skybox.shader t.skybox
