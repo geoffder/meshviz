@@ -145,6 +145,9 @@ module Skybox = struct
     unload_shader t.shader
 
   let shader t = t.shader
+
+  let set_resolution t v =
+    set_shader_value t.shader t.resolution (to_voidp (addr v)) ShaderUniformDataType.Vec2
 end
 
 type t =
@@ -355,6 +358,12 @@ let load () =
 
 let pbr_shader t = Pbr.shader t.pbr
 let skybox_shader t = Skybox.shader t.skybox
+
+let update t camera_pos resolution =
+  let pos = Vector3.(create (x camera_pos) (y camera_pos) (z camera_pos))
+  and res = Vector2.(create (x resolution) (y resolution)) in
+  Pbr.set_view_pos t.pbr pos;
+  Skybox.set_resolution t.skybox res
 
 let unload t =
   (* FIXME: just ignoring because of unused warning for now *)
