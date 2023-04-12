@@ -100,48 +100,68 @@ module Light = struct
 end
 
 module Pbr = struct
-  module Property = struct
-    type t =
-      { mutable bitmap : Texture2D.t option
-      ; mutable color : Color.t
-      ; bitmap_loc : int
-      ; use_bitmap_loc : int
-      ; color_loc : int
-      }
-  end
+  type property =
+    { mutable bitmap : Texture2D.t option
+    ; mutable color : Color.t
+    ; bitmap_loc : int
+    ; use_bitmap_loc : int
+    ; color_loc : int
+    }
 
-  module Material = struct
-    type t =
-      { albedo : Property.t
-      ; normals : Property.t
-      ; metalness : Property.t
-      ; roughness : Property.t
-      ; ao : Property.t
-      ; emission : Property.t
-      ; height : Property.t
-      }
-  end
+  type material =
+    { albedo : property
+    ; normals : property
+    ; metalness : property
+    ; roughness : property
+    ; ao : property
+    ; emission : property
+    ; height : property
+    }
 
   type t =
     { shader : Shader.t
+    ; material : material
     ; view_pos_loc : int
     ; render_mode_loc : int
     ; model_matrix_loc : int
     }
 
-  let load () =
+  let setup_property shader name texture_unit color =
+    let bitmap_loc = get_shader_location shader (name ^ "sampler") in
+    let tu = CArray.(to_voidp (start @@ of_list Ctypes.int [ texture_unit ])) in
+    set_shader_value_v shader bitmap_loc tu ShaderUniformDataType.Int 1;
+    { bitmap = None
+    ; color
+    ; bitmap_loc
+    ; use_bitmap_loc = get_shader_location shader (name ^ "useSampler")
+    ; color_loc = get_shader_location shader (name ^ "color")
+    }
+
+  let setup_material shader color metalness roughness =
+    { albedo = setup_property shader "albedo" 3 color
+    ; normals = setup_property shader "normals" 4 (Color.create 128 128 255 255)
+    ; metalness = setup_property shader "metalness" 5 (Color.create metalness 0 0 0)
+    ; roughness = setup_property shader "roughness" 6 (Color.create roughness 0 0 0)
+    ; ao = setup_property shader "ao" 7 (Color.create 255 255 255 255)
+    ; emission = setup_property shader "emission" 8 (Color.create 0 0 0 0)
+    ; height = setup_property shader "height" 9 (Color.create 0 0 0 0)
+    }
+
+  let load ?(color = Color.white) ?(metalness = 255) ?(roughness = 255) () =
     let shader = load_shader "pbr.vert" "pbr.frag" in
-    let view_pos_loc = get_shader_location shader "viewPos"
+    let material = setup_material shader color metalness roughness
+    and view_pos_loc = get_shader_location shader "viewPos"
     and render_mode_loc = get_shader_location shader "renderMode"
     and model_matrix_loc = get_shader_location shader "mMatrix" in
     (* setup texture units *)
     setup_constant_vals shader "irradianceMap" 0;
     setup_constant_vals shader "prefilterMap" 1;
     setup_constant_vals shader "brdfLUT" 2;
-    { shader; view_pos_loc; render_mode_loc; model_matrix_loc }
+    { shader; material; view_pos_loc; render_mode_loc; model_matrix_loc }
 
   let unload t = unload_shader t.shader
   let shader t = t.shader
+  let set_albedo_texture t tex = t.material.albedo.bitmap <- Some tex
 
   let set_render_mode { shader; render_mode_loc; _ } i =
     let mode = Ctypes.allocate Ctypes.int i in
