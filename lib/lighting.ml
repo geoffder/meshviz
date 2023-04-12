@@ -101,13 +101,9 @@ end
 
 module Pbr = struct
   module Property = struct
-    (* TODO: probably make bitmap a mutable option (remove use_bitmap, still
-         need loc since that is used for shader interaction, but the Option.is_some
-         can replace the flag) *)
     type t =
-      { bitmap : Texture2D.t
-      ; use_bitmap : bool
-      ; color : Color.t
+      { mutable bitmap : Texture2D.t option
+      ; mutable color : Color.t
       ; bitmap_loc : int
       ; use_bitmap_loc : int
       ; color_loc : int
