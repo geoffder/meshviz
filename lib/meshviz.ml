@@ -3,6 +3,7 @@ module Lighting = Lighting
 
 let get f i a = Raylib.CArray.get (f a) i
 
+(* TODO: use triangle indices instead of duplicating vertices *)
 let ocadml_mesh (om : OCADml.Mesh.t) =
   let mesh = Mesh.create () in
   let n_faces = List.length @@ OCADml.Mesh.faces om in

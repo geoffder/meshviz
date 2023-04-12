@@ -6,6 +6,13 @@ let n_lights = ref 0
 let max_lights = 4
 let max_mipmap_levels = 5
 
+(* TODO: for fields that are updated when the corresponding values are sent to
+    the shader (so they can be checked), I should probably just make them
+    mutable, since there isn't really a time when I want to pass them around
+    like they are immutable structs anyway. n_lights could also be a mutable
+    field in the type t I guess (there should only be one of it, perhaps a check
+    to see if it is currently loaded/initialized (private global ref) and raise
+    if load is called inappropriately). *)
 module Light = struct
   type typ =
     [ `Directional
@@ -93,52 +100,78 @@ module Light = struct
 end
 
 module Pbr = struct
+  module Property = struct
+    (* TODO: probably make bitmap a mutable option (remove use_bitmap, still
+         need loc since that is used for shader interaction, but the Option.is_some
+         can replace the flag) *)
+    type t =
+      { bitmap : Texture2D.t
+      ; use_bitmap : bool
+      ; color : Color.t
+      ; bitmap_loc : int
+      ; use_bitmap_loc : int
+      ; color_loc : int
+      }
+  end
+
+  module Material = struct
+    type t =
+      { albedo : Property.t
+      ; normals : Property.t
+      ; metalness : Property.t
+      ; roughness : Property.t
+      ; ao : Property.t
+      ; emission : Property.t
+      ; height : Property.t
+      }
+  end
+
   type t =
     { shader : Shader.t
-    ; view_pos : int
-    ; render_mode : int
-    ; model_matrix : int
+    ; view_pos_loc : int
+    ; render_mode_loc : int
+    ; model_matrix_loc : int
     }
 
   let load () =
     let shader = load_shader "pbr.vert" "pbr.frag" in
-    let view_pos = get_shader_location shader "viewPos"
-    and render_mode = get_shader_location shader "renderMode"
-    and model_matrix = get_shader_location shader "mMatrix" in
+    let view_pos_loc = get_shader_location shader "viewPos"
+    and render_mode_loc = get_shader_location shader "renderMode"
+    and model_matrix_loc = get_shader_location shader "mMatrix" in
     (* setup texture units *)
     setup_constant_vals shader "irradianceMap" 0;
     setup_constant_vals shader "prefilterMap" 1;
     setup_constant_vals shader "brdfLUT" 2;
-    { shader; view_pos; render_mode; model_matrix }
+    { shader; view_pos_loc; render_mode_loc; model_matrix_loc }
 
   let unload t = unload_shader t.shader
   let shader t = t.shader
 
-  let set_render_mode t i =
+  let set_render_mode { shader; render_mode_loc; _ } i =
     let mode = Ctypes.allocate Ctypes.int i in
-    set_shader_value t.shader t.render_mode (to_voidp mode) ShaderUniformDataType.Int
+    set_shader_value shader render_mode_loc (to_voidp mode) ShaderUniformDataType.Int
 
-  let set_view_pos t v =
-    set_shader_value t.shader t.view_pos (to_voidp (addr v)) ShaderUniformDataType.Vec3
+  let set_view_pos { shader; view_pos_loc; _ } v =
+    set_shader_value shader view_pos_loc (to_voidp (addr v)) ShaderUniformDataType.Vec3
 end
 
 module Skybox = struct
   type t =
     { shader : Shader.t
     ; tex : Texture2D.t
-    ; view_pos : int
-    ; resolution : int
-    ; projection : int
+    ; view_pos_loc : int
+    ; resolution_loc : int
+    ; projection_loc : int
     }
 
   let load () =
     let shader = load_shader "pbr.vert" "pbr.frag"
     and tex = load_texture (texture_path "pinetree.hdr") in
-    let view_pos = get_shader_location shader "view"
-    and resolution = get_shader_location shader "resolution"
-    and projection = get_shader_location shader "projection" in
+    let view_pos_loc = get_shader_location shader "view"
+    and resolution_loc = get_shader_location shader "resolution"
+    and projection_loc = get_shader_location shader "projection" in
     setup_constant_vals shader "environmentMap" 0;
-    { shader; tex; view_pos; resolution; projection }
+    { shader; tex; view_pos_loc; resolution_loc; projection_loc }
 
   let unload t =
     unload_texture t.tex;
@@ -146,8 +179,11 @@ module Skybox = struct
 
   let shader t = t.shader
 
-  let set_resolution t v =
-    set_shader_value t.shader t.resolution (to_voidp (addr v)) ShaderUniformDataType.Vec2
+  let set_resolution { shader; resolution_loc; _ } v =
+    set_shader_value shader resolution_loc (to_voidp (addr v)) ShaderUniformDataType.Vec2
+
+  let set_projection { shader; projection_loc; _ } proj =
+    set_shader_value_matrix shader projection_loc proj
 end
 
 type t =
@@ -160,10 +196,12 @@ type t =
   ; lights : Light.t option array
   }
 
+(* let setup_material_pbr t albedo metalness roughness = () *)
+
 let load () =
   let pbr = Pbr.load ()
   and skybox = Skybox.load () in
-  ignore (skybox.resolution, skybox.view_pos);
+  (* ignore (skybox.resolution_loc, skybox.view_pos_loc); *)
   (* shaders *)
   let cubemap_shader = load_shader "cubemap.vert" "cubemap.frag"
   and irradiance_shader = load_shader "skybox.vert" "irradiance.frag"
@@ -337,7 +375,7 @@ let load () =
     Matrix.transpose @@ Matrix.perspective 60. ratio 0.01 1000.
   in
   set_shader_value_matrix cubemap_shader cubemap_projection default_proj;
-  set_shader_value_matrix skybox.shader skybox.projection default_proj;
+  Skybox.set_projection skybox default_proj;
   set_shader_value_matrix irradiance_shader irradiance_projection default_proj;
   set_shader_value_matrix prefilter_shader prefilter_projection default_proj;
   (* reset viewport dimensions to default *)
@@ -368,7 +406,7 @@ let update t camera resolution =
 
 let unload t =
   (* FIXME: just ignoring because of unused warning for now *)
-  ignore t.pbr.model_matrix;
+  ignore t.pbr.model_matrix_loc;
   (* unload shaders *)
   Pbr.unload t.pbr;
   Skybox.unload t.skybox;
