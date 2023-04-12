@@ -4,6 +4,7 @@ type t
 
 val load : unit -> t
 val unload : t -> unit
+val update : t -> Camera.t -> Vector2.t -> unit
 val set_render_mode : t -> int -> unit
 val set_view_pos : t -> Vector3.t -> unit
 val pbr_shader : t -> Shader.t

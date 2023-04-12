@@ -359,8 +359,9 @@ let load () =
 let pbr_shader t = Pbr.shader t.pbr
 let skybox_shader t = Skybox.shader t.skybox
 
-let update t camera_pos resolution =
-  let pos = Vector3.(create (x camera_pos) (y camera_pos) (z camera_pos))
+let update t camera resolution =
+  let cpos = Camera.position camera in
+  let pos = Vector3.(create (x cpos) (y cpos) (z cpos))
   and res = Vector2.(create (x resolution) (y resolution)) in
   Pbr.set_view_pos t.pbr pos;
   Skybox.set_resolution t.skybox res
