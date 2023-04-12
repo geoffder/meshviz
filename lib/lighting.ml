@@ -97,17 +97,19 @@ module Pbr = struct
     { shader : Shader.t
     ; view_pos : int
     ; render_mode : int
+    ; model_matrix : int
     }
 
   let load () =
     let shader = load_shader "pbr.vert" "pbr.frag" in
     let view_pos = get_shader_location shader "viewPos"
-    and render_mode = get_shader_location shader "renderMode" in
+    and render_mode = get_shader_location shader "renderMode"
+    and model_matrix = get_shader_location shader "mMatrix" in
     (* setup texture units *)
     setup_constant_vals shader "irradianceMap" 0;
     setup_constant_vals shader "prefilterMap" 1;
     setup_constant_vals shader "brdfLUT" 2;
-    { shader; view_pos; render_mode }
+    { shader; view_pos; render_mode; model_matrix }
 
   let unload t = unload_shader t.shader
   let shader t = t.shader
@@ -126,6 +128,7 @@ module Skybox = struct
     ; tex : Texture2D.t
     ; view_pos : int
     ; resolution : int
+    ; projection : int
     }
 
   let load () =
@@ -135,8 +138,7 @@ module Skybox = struct
     and resolution = get_shader_location shader "resolution"
     and projection = get_shader_location shader "projection" in
     setup_constant_vals shader "environmentMap" 0;
-    set_shader_value_matrix shader projection default_proj;
-    { shader; tex; view_pos; resolution }
+    { shader; tex; view_pos; resolution; projection }
 
   let unload t =
     unload_texture t.tex;
@@ -323,9 +325,25 @@ let load () =
   Gl.(viewport 0 0 brdf_size brdf_size);
   Gl.use_program (Unsigned.UInt.to_int @@ Shader.id brdf_shader);
   Gl.(clear (color_buffer_bit lor depth_buffer_bit));
-  (* TODO: RenderQuad() *)
+  RenderQuad.render ();
   (* unbind framebuffer and textures *)
   Gl.(bind_framebuffer framebuffer 0);
+  (* then before rendering, configure the viewport to the actual screen dimensions *)
+  let default_proj =
+    let ratio = Float.(of_int (get_screen_width ()) /. of_int (get_screen_height ())) in
+    Matrix.transpose @@ Matrix.perspective 60. ratio 0.01 1000.
+  in
+  set_shader_value_matrix cubemap_shader cubemap_projection default_proj;
+  set_shader_value_matrix skybox.shader skybox.projection default_proj;
+  set_shader_value_matrix irradiance_shader irradiance_projection default_proj;
+  set_shader_value_matrix prefilter_shader prefilter_projection default_proj;
+  (* reset viewport dimensions to default *)
+  Gl.(viewport 0 0 (get_screen_width ()) (get_screen_height ()));
+  (* unload shaders not kept in environment *)
+  unload_shader cubemap_shader;
+  unload_shader irradiance_shader;
+  unload_shader prefilter_shader;
+  unload_shader brdf_shader;
   { pbr
   ; skybox
   ; cubemap_id
@@ -339,10 +357,16 @@ let pbr_shader t = Pbr.shader t.pbr
 let skybox_shader t = Skybox.shader t.skybox
 
 let unload t =
-  ignore t.cubemap_id;
-  (* avoid warning *)
+  (* FIXME: just ignoring because of unused warning for now *)
+  ignore t.pbr.model_matrix;
+  (* unload shaders *)
   Pbr.unload t.pbr;
-  Skybox.unload t.skybox
+  Skybox.unload t.skybox;
+  (* unload dynamic textures created in environment initialization *)
+  Gl.(delete_textures 1 t.cubemap_id);
+  Gl.(delete_textures 1 t.irradiance_id);
+  Gl.(delete_textures 1 t.prefilter_id);
+  Gl.(delete_textures 1 t.brdf_id)
 
 let light_count () = !n_lights
 

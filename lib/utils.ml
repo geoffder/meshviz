@@ -16,10 +16,6 @@ let load_shader vert frag =
     failwith (Printf.sprintf "%s shader failed to compile" name) )
   else shader
 
-let default_proj =
-  let ratio = Float.(of_int (get_screen_width ()) /. of_int (get_screen_height ())) in
-  Matrix.transpose @@ Matrix.perspective 60. ratio 0.01 1000.
-
 let setup_constant_vals shader loc_name i =
   set_shader_value_v
     shader
