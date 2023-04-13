@@ -100,6 +100,20 @@ module Light = struct
 end
 
 module Pbr = struct
+  (* TODO: actually, I think this PBR example I am working from was before the
+    PBR materials were added to the maps attached to each material included
+    PBR. So, I should be storing these on the models themselves, and alter the
+     draw_model replacement port to use those.
+
+     - use_bitmap can be set by checking whether MaterialMap.texture has id = 0
+       (when setup is done in rPBR and when textures are unset:
+       [mat._.bitmap = (Texture2D){ 0 }] I believe this is equivalent to a
+       texture that has an id of zero (without the rest of the block actually
+       being allocated/initialized).
+     - what I do still need I think, is a helper function that sets up the pbr
+       material maps on a material for a mesh
+
+     *)
   type property =
     { mutable bitmap : Texture2D.t option
     ; mutable color : Color.t
@@ -161,7 +175,44 @@ module Pbr = struct
 
   let unload t = unload_shader t.shader
   let shader t = t.shader
+
+  (* TODO: actually, just doing it with a variant is probably
+    cleaner rather than breaking into functions like this... *)
   let set_albedo_texture t tex = t.material.albedo.bitmap <- Some tex
+  let set_normals_texture t tex = t.material.normals.bitmap <- Some tex
+  let set_metalness_texture t tex = t.material.metalness.bitmap <- Some tex
+  let set_roughness_texture t tex = t.material.roughness.bitmap <- Some tex
+  let set_ao_texture t tex = t.material.ao.bitmap <- Some tex
+  let set_emission_texture t tex = t.material.emission.bitmap <- Some tex
+  let set_height_texture t tex = t.material.height.bitmap <- Some tex
+
+  let unset_albedo_texture t =
+    Option.iter (fun tex -> unload_texture tex) t.material.albedo.bitmap;
+    t.material.albedo.bitmap <- None
+
+  let unset_normals_texture t =
+    Option.iter (fun tex -> unload_texture tex) t.material.normals.bitmap;
+    t.material.normals.bitmap <- None
+
+  let unset_metalness_texture t =
+    Option.iter (fun tex -> unload_texture tex) t.material.metalness.bitmap;
+    t.material.metalness.bitmap <- None
+
+  let unset_roughness_texture t =
+    Option.iter (fun tex -> unload_texture tex) t.material.roughness.bitmap;
+    t.material.roughness.bitmap <- None
+
+  let unset_ao_texture t =
+    Option.iter (fun tex -> unload_texture tex) t.material.ao.bitmap;
+    t.material.ao.bitmap <- None
+
+  let unset_emission_texture t =
+    Option.iter (fun tex -> unload_texture tex) t.material.emission.bitmap;
+    t.material.emission.bitmap <- None
+
+  let unset_height_texture t =
+    Option.iter (fun tex -> unload_texture tex) t.material.height.bitmap;
+    t.material.height.bitmap <- None
 
   let set_render_mode { shader; render_mode_loc; _ } i =
     let mode = Ctypes.allocate Ctypes.int i in
