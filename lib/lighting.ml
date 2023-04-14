@@ -141,14 +141,14 @@ module Pbr = struct
     }
 
   let setup_property shader name texture_unit color =
-    let bitmap_loc = get_shader_location shader (name ^ "sampler") in
+    let bitmap_loc = get_shader_location shader (name ^ ".sampler") in
     let tu = CArray.(to_voidp (start @@ of_list Ctypes.int [ texture_unit ])) in
     set_shader_value_v shader bitmap_loc tu ShaderUniformDataType.Int 1;
     { bitmap = None
     ; color
     ; bitmap_loc
-    ; use_bitmap_loc = get_shader_location shader (name ^ "useSampler")
-    ; color_loc = get_shader_location shader (name ^ "color")
+    ; use_bitmap_loc = get_shader_location shader (name ^ ".useSampler")
+    ; color_loc = get_shader_location shader (name ^ ".color")
     }
 
   let setup_material shader color metalness roughness =
