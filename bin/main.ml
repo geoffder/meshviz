@@ -57,7 +57,8 @@ let rec loop ((lighting, models, camera, position, curr_model) as args) =
     begin_drawing ();
     clear_background Color.raywhite;
     begin_mode_3d camera;
-    draw_model models.(!curr_model) position 1.0 Color.white;
+    (* draw_model models.(!curr_model) position 1.0 Color.white; *)
+    Lighting.draw_model_pbr ~pos:position lighting models.(!curr_model);
     draw_grid 10 1.0;
     end_mode_3d ();
     draw_rectangle 30 400 235 30 (fade Color.skyblue 0.5);

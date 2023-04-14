@@ -21,3 +21,12 @@ val create_light
   -> unit
 
 val set_light_position : t -> int -> Vector3.t -> unit
+
+val draw_model_pbr
+  :  ?pos:Vector3.t
+  -> ?rot_ax:Vector3.t
+  -> ?rot:float
+  -> ?scale_:Vector3.t
+  -> t
+  -> Model.t
+  -> unit

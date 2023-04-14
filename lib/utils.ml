@@ -26,3 +26,9 @@ let setup_constant_vals shader loc_name i =
 
 let create_uint32_bigarray n = Bigarray.(Array1.create int32 c_layout n)
 let uint32_bigarray_get a i = Int32.to_int @@ Bigarray.Array1.get a i
+
+let color_to_vec3 c =
+  let r = (Float.of_int @@ Color.r c) /. 255.
+  and g = (Float.of_int @@ Color.g c) /. 255.
+  and b = (Float.of_int @@ Color.b c) /. 255. in
+  Vector3.create r g b

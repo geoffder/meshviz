@@ -115,8 +115,8 @@ module Pbr = struct
 
      *)
   type property =
-    { mutable bitmap : Texture2D.t option
-    ; mutable color : Color.t
+    { bitmap : Texture2D.t option
+    ; color : Color.t
     ; bitmap_loc : int
     ; use_bitmap_loc : int
     ; color_loc : int
@@ -176,43 +176,78 @@ module Pbr = struct
   let unload t = unload_shader t.shader
   let shader t = t.shader
 
+  let update_bitmaps t =
+    let f prop tx =
+      match prop.bitmap with
+      | Some bm ->
+        let use = CArray.(to_voidp (start @@ of_list Ctypes.bool [ true ])) in
+        set_shader_value_v t.shader prop.use_bitmap_loc use ShaderUniformDataType.Int 1;
+        Gl.(active_texture tx);
+        Gl.(bind_texture texture_2d (Unsigned.UInt.to_int @@ Texture2D.id bm))
+      | None ->
+        let use = CArray.(to_voidp (start @@ of_list Ctypes.bool [ false ])) in
+        set_shader_value_v t.shader prop.use_bitmap_loc use ShaderUniformDataType.Int 1
+    in
+    f t.material.albedo Gl.texture3;
+    f t.material.normals Gl.texture4;
+    f t.material.metalness Gl.texture5;
+    f t.material.roughness Gl.texture6;
+    f t.material.ao Gl.texture7;
+    f t.material.emission Gl.texture8;
+    f t.material.height Gl.texture9
+
+  let disable_bitmaps t =
+    let f prop tx =
+      if Option.is_some prop.bitmap
+      then (
+        Gl.(active_texture tx);
+        Gl.(bind_texture texture_2d 0) )
+    in
+    f t.material.albedo Gl.texture3;
+    f t.material.normals Gl.texture4;
+    f t.material.metalness Gl.texture5;
+    f t.material.roughness Gl.texture6;
+    f t.material.ao Gl.texture7;
+    f t.material.emission Gl.texture8;
+    f t.material.height Gl.texture9
+
   (* TODO: actually, just doing it with a variant is probably
     cleaner rather than breaking into functions like this... *)
-  let set_albedo_texture t tex = t.material.albedo.bitmap <- Some tex
-  let set_normals_texture t tex = t.material.normals.bitmap <- Some tex
-  let set_metalness_texture t tex = t.material.metalness.bitmap <- Some tex
-  let set_roughness_texture t tex = t.material.roughness.bitmap <- Some tex
-  let set_ao_texture t tex = t.material.ao.bitmap <- Some tex
-  let set_emission_texture t tex = t.material.emission.bitmap <- Some tex
-  let set_height_texture t tex = t.material.height.bitmap <- Some tex
+  (* let set_albedo_texture t tex = t.material.albedo.bitmap <- Some tex *)
+  (* let set_normals_texture t tex = t.material.normals.bitmap <- Some tex *)
+  (* let set_metalness_texture t tex = t.material.metalness.bitmap <- Some tex *)
+  (* let set_roughness_texture t tex = t.material.roughness.bitmap <- Some tex *)
+  (* let set_ao_texture t tex = t.material.ao.bitmap <- Some tex *)
+  (* let set_emission_texture t tex = t.material.emission.bitmap <- Some tex *)
+  (* let set_height_texture t tex = t.material.height.bitmap <- Some tex *)
 
-  let unset_albedo_texture t =
-    Option.iter (fun tex -> unload_texture tex) t.material.albedo.bitmap;
-    t.material.albedo.bitmap <- None
+  (* let unset_albedo_texture t = *)
+  (*   Option.iter (fun tex -> unload_texture tex) t.material.albedo.bitmap; *)
+  (*   t.material.albedo.bitmap <- None *)
 
-  let unset_normals_texture t =
-    Option.iter (fun tex -> unload_texture tex) t.material.normals.bitmap;
-    t.material.normals.bitmap <- None
+  (* let unset_normals_texture t = *)
+  (*   Option.iter (fun tex -> unload_texture tex) t.material.normals.bitmap; *)
+  (*   t.material.normals.bitmap <- None *)
 
-  let unset_metalness_texture t =
-    Option.iter (fun tex -> unload_texture tex) t.material.metalness.bitmap;
-    t.material.metalness.bitmap <- None
+  (* let unset_metalness_texture t = *)
+  (*   Option.iter (fun tex -> unload_texture tex) t.material.metalness.bitmap; *)
+  (*   t.material.metalness.bitmap <- None *)
 
-  let unset_roughness_texture t =
-    Option.iter (fun tex -> unload_texture tex) t.material.roughness.bitmap;
-    t.material.roughness.bitmap <- None
+  (* let unset_roughness_texture t = *)
+  (*   Option.iter (fun tex -> unload_texture tex) t.material.roughness.bitmap; *)
+  (*   t.material.roughness.bitmap <- None *)
 
-  let unset_ao_texture t =
-    Option.iter (fun tex -> unload_texture tex) t.material.ao.bitmap;
-    t.material.ao.bitmap <- None
+  (* let unset_ao_texture t = *)
+  (*   Option.iter (fun tex -> unload_texture tex) t.material.ao.bitmap; *)
+  (*   t.material.ao.bitmap <- None *)
 
-  let unset_emission_texture t =
-    Option.iter (fun tex -> unload_texture tex) t.material.emission.bitmap;
-    t.material.emission.bitmap <- None
+  (* let unset_emission_texture t = *)
+  (*   Option.iter (fun tex -> unload_texture tex) t.material.emission.bitmap; *)
+  (*   t.material.emission.bitmap <- None *)
 
-  let unset_height_texture t =
-    Option.iter (fun tex -> unload_texture tex) t.material.height.bitmap;
-    t.material.height.bitmap <- None
+  (* let unset_height_texture t = *)
+  (*   Option.iter (fun tex -> unload_texture tex) t.material.height.bitmap; *)
+  (*   t.material.height.bitmap <- None *)
 
   let set_render_mode { shader; render_mode_loc; _ } i =
     let mode = Ctypes.allocate Ctypes.int i in
@@ -268,7 +303,7 @@ type t =
 let load () =
   let pbr = Pbr.load ()
   and skybox = Skybox.load () in
-  (* ignore (skybox.resolution_loc, skybox.view_pos_loc); *)
+  ignore (skybox.resolution_loc, skybox.view_pos_loc, pbr.material.albedo.bitmap_loc);
   (* shaders *)
   let cubemap_shader = load_shader "cubemap.vert" "cubemap.frag"
   and irradiance_shader = load_shader "skybox.vert" "irradiance.frag"
@@ -498,3 +533,92 @@ let set_light_position t i pos =
 
 let set_render_mode t i = Pbr.set_render_mode t.pbr i
 let set_view_pos t p = Pbr.set_view_pos t.pbr p
+
+let draw_model_pbr
+  ?(pos = Vector3.zero ())
+  ?(rot_ax = Vector3.zero ())
+  ?(rot = 0.)
+  ?(scale_ = Vector3.create 1. 1. 1.)
+  t
+  model
+  =
+  (* switch to PBR shader *)
+  Gl.use_program (Unsigned.UInt.to_int @@ Shader.id t.pbr.shader);
+  (* set up material uniforms and other constant values *)
+  let albedo = color_to_vec3 t.pbr.material.albedo.color in
+  set_shader_value
+    t.pbr.shader
+    t.pbr.material.albedo.color_loc
+    (to_voidp @@ addr albedo)
+    ShaderUniformDataType.Vec3;
+  let normals = color_to_vec3 t.pbr.material.normals.color in
+  set_shader_value
+    t.pbr.shader
+    t.pbr.material.normals.color_loc
+    (to_voidp @@ addr normals)
+    ShaderUniformDataType.Vec3;
+  let metalness = color_to_vec3 t.pbr.material.metalness.color in
+  set_shader_value
+    t.pbr.shader
+    t.pbr.material.metalness.color_loc
+    (to_voidp @@ addr metalness)
+    ShaderUniformDataType.Vec3;
+  let roughness =
+    let v = color_to_vec3 t.pbr.material.roughness.color in
+    Vector3.subtract (Vector3.create 1. 1. 1.) v
+  in
+  set_shader_value
+    t.pbr.shader
+    t.pbr.material.roughness.color_loc
+    (to_voidp @@ addr roughness)
+    ShaderUniformDataType.Vec3;
+  let ao = color_to_vec3 t.pbr.material.ao.color in
+  set_shader_value
+    t.pbr.shader
+    t.pbr.material.ao.color_loc
+    (to_voidp @@ addr ao)
+    ShaderUniformDataType.Vec3;
+  let emission = color_to_vec3 t.pbr.material.emission.color in
+  set_shader_value
+    t.pbr.shader
+    t.pbr.material.emission.color_loc
+    (to_voidp @@ addr emission)
+    ShaderUniformDataType.Vec3;
+  let height = color_to_vec3 t.pbr.material.height.color in
+  set_shader_value
+    t.pbr.shader
+    t.pbr.material.height.color_loc
+    (to_voidp @@ addr height)
+    ShaderUniformDataType.Vec3;
+  (* calculate and send to shader model matrix *)
+  let transform =
+    let s = Vector3.(Matrix.scale (x scale_) (y scale_) (z scale_))
+    and r = Matrix.rotate rot_ax rot
+    and tr = Vector3.(Matrix.translate (x pos) (y pos) (z pos)) in
+    Matrix.(multiply (multiply s r) tr)
+  in
+  set_shader_value_matrix t.pbr.shader t.pbr.model_matrix_loc transform;
+  (* enable and bind irradiance map *)
+  Gl.(active_texture texture0);
+  Gl.(bind_texture texture_cube_map (uint32_bigarray_get t.irradiance_id 0));
+  (* enable and bind prefiltered reflection map *)
+  Gl.(active_texture texture1);
+  Gl.(bind_texture texture_cube_map (uint32_bigarray_get t.prefilter_id 0));
+  (* enable and bind BRDF LUT map *)
+  Gl.(active_texture texture2);
+  Gl.(bind_texture texture_2d (uint32_bigarray_get t.brdf_id 0));
+  (* send sampler use state and maybe bitmaps to PBR shader *)
+  Pbr.update_bitmaps t.pbr;
+  (* draw model using PBR shader and texture maps *)
+  draw_model_ex model pos rot_ax rot scale_ Color.white;
+  (* disable and bind irradiance map *)
+  Gl.(active_texture texture0);
+  Gl.(bind_texture texture_cube_map 0);
+  (* disable and bind prefiltered reflection map *)
+  Gl.(active_texture texture1);
+  Gl.(bind_texture texture_cube_map 0);
+  (* disable and bind BRDF LUT map *)
+  Gl.(active_texture texture2);
+  Gl.(bind_texture texture_2d 0);
+  (* disable sampler bitmaps *)
+  Pbr.disable_bitmaps t.pbr
