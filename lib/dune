@@ -3,7 +3,7 @@
  (libraries OCADml raylib dune-site))
 
 (install
- (files "resources/lighting.vs" "resources/lighting.fs")
+ (files "resources/shaders/lighting.vert" "resources/shaders/lighting.frag")
  (section
   (site
    (meshviz shaders))))

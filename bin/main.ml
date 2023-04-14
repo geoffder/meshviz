@@ -31,8 +31,6 @@ let setup () =
       CameraProjection.Perspective
   in
   let position = Vector3.create 0.0 0.0 0.0 in
-  set_camera_mode camera CameraMode.Orbital;
-  (* set_camera_mode camera CameraMode.Free; *)
   set_target_fps 60;
   lighting, models, camera, position, ref 0
 
@@ -48,7 +46,8 @@ let rec loop ((lighting, models, camera, position, curr_model) as args) =
     Array.iter unload_model models;
     close_window () )
   else (
-    update_camera (addr camera);
+    update_camera (addr camera) CameraMode.Orbital;
+    (* update_camera (addr camera) CameraMode.Free; *)
     if is_mouse_button_pressed MouseButton.Left || is_key_pressed Key.Right
     then curr_model := (!curr_model + 1) mod Array.length models;
     if is_key_pressed Key.Left
