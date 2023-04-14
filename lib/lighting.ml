@@ -99,7 +99,9 @@ type t =
 let load () =
   let site = List.hd DuneSites.Sites.shaders in
   let path n = Filename.concat site n in
-  let shader = load_shader (path "lighting.vs") (path "lighting.fs") in
+  let shader =
+    load_shader (path "shaders/lighting.vert") (path "shaders/lighting.frag")
+  in
   if Shader.id shader = Unsigned.UInt.zero
   then failwith "Lighting shader failed to compile";
   let view_pos = get_shader_location shader "viewPos"
