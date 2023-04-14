@@ -14,11 +14,11 @@ module Light = struct
     | `Point -> 1
 
   type t =
-    { typ : typ
-    ; position : Vector3.t
-    ; target : Vector3.t
-    ; color : Color.t
-    ; enabled : bool
+    { mutable typ : typ
+    ; mutable position : Vector3.t
+    ; mutable target : Vector3.t
+    ; mutable color : Color.t
+    ; mutable enabled : bool
     ; loc_enabled : int
     ; loc_typ : int
     ; loc_pos : int
@@ -26,35 +26,44 @@ module Light = struct
     ; loc_color : int
     }
 
-  let update_values shader light =
-    let enabled = Ctypes.allocate Ctypes.bool light.enabled in
-    set_shader_value shader light.loc_enabled (to_voidp enabled) ShaderUniformDataType.Int;
-    let typ = Ctypes.allocate Ctypes.int (typ_to_int light.typ) in
-    set_shader_value shader light.loc_typ (to_voidp typ) ShaderUniformDataType.Int;
-    set_shader_value
-      shader
-      light.loc_pos
-      (to_voidp (addr light.position))
-      ShaderUniformDataType.Vec3;
-    set_shader_value
-      shader
-      light.loc_target
-      (to_voidp (addr light.target))
-      ShaderUniformDataType.Vec3;
-    let vec4_int f a b c d = Vector4.create (f a) (f b) (f c) (f d) in
-    let color =
-      vec4_int
-        (fun accessor -> (accessor light.color |> float) /. 255.0)
-        Color.r
-        Color.g
-        Color.b
-        Color.a
-    in
-    set_shader_value
-      shader
-      light.loc_color
-      (to_voidp (addr color))
-      ShaderUniformDataType.Vec4
+  let update_typ t shader typ =
+    let typ = Ctypes.allocate Ctypes.int (typ_to_int typ) in
+    set_shader_value shader t.loc_typ (to_voidp typ) ShaderUniformDataType.Int
+
+  let set_typ t shader typ =
+    t.typ <- typ;
+    update_typ t shader typ
+
+  let update_position t shader p =
+    set_shader_value shader t.loc_pos (to_voidp (addr p)) ShaderUniformDataType.Vec3
+
+  let set_position t shader p =
+    t.position <- Vector3.(create (x p) (y p) (z p));
+    update_position t shader t.position
+
+  let update_target t shader p =
+    set_shader_value shader t.loc_target (to_voidp (addr p)) ShaderUniformDataType.Vec3
+
+  let set_target t shader p =
+    t.target <- Vector3.(create (x p) (y p) (z p));
+    update_target t shader t.target
+
+  let update_enabled t shader b =
+    let enabled = Ctypes.allocate Ctypes.bool b in
+    set_shader_value shader t.loc_enabled (to_voidp enabled) ShaderUniformDataType.Int
+
+  let set_enabled t shader b =
+    t.enabled <- b;
+    update_enabled t shader b
+
+  let update_color t shader c =
+    let f i8 = Float.of_int i8 /. 255.0 in
+    let clr = Color.(Vector4.create (f @@ r c) (f @@ g c) (f @@ b c) (f @@ a c)) in
+    set_shader_value shader t.loc_color (to_voidp (addr clr)) ShaderUniformDataType.Vec4
+
+  let set_color t shader c =
+    t.color <- Color.(create (r c) (g c) (b c) (a c));
+    update_color t shader t.color
 
   let make typ position target color shader =
     let enabled_name = Printf.sprintf "lights[%i].enabled" !n_lights in
@@ -62,7 +71,7 @@ module Light = struct
     let pos_name = Printf.sprintf "lights[%i].position" !n_lights in
     let target_name = Printf.sprintf "lights[%i].target" !n_lights in
     let color_name = Printf.sprintf "lights[%i].color" !n_lights in
-    let light =
+    let t =
       { enabled = true
       ; typ
       ; position
@@ -75,18 +84,14 @@ module Light = struct
       ; loc_color = get_shader_location shader color_name
       }
     in
-    update_values shader light;
-    light
+    update_enabled t shader t.enabled;
+    update_typ t shader t.typ;
+    update_position t shader t.position;
+    update_target t shader t.target;
+    update_color t shader t.color;
+    t
 
-  let set_position t shader p =
-    Vector3.set_x t.position (Vector3.x p);
-    Vector3.set_y t.position (Vector3.y p);
-    Vector3.set_z t.position (Vector3.z p);
-    set_shader_value
-      shader
-      t.loc_pos
-      (to_voidp (addr t.position))
-      ShaderUniformDataType.Vec3
+  let toggle t shader = set_enabled t shader (not t.enabled)
 end
 
 type t =
@@ -125,5 +130,16 @@ let create_light ?(typ = `Directional) ?(target = Vector3.zero ()) ~pos ~color t
     t.lights.(!n_lights) <- Some light;
     n_lights := !n_lights + 1 )
 
+let set_light_typ t i typ =
+  Option.iter (fun l -> Light.set_typ l t.shader typ) t.lights.(i)
+
 let set_light_position t i pos =
   Option.iter (fun l -> Light.set_position l t.shader pos) t.lights.(i)
+
+let set_light_target t i pos =
+  Option.iter (fun l -> Light.set_target l t.shader pos) t.lights.(i)
+
+let set_light_color t i c =
+  Option.iter (fun l -> Light.set_color l t.shader c) t.lights.(i)
+
+let toggle_light t i = Option.iter (fun l -> Light.toggle l t.shader) t.lights.(i)

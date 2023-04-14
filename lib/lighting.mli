@@ -18,4 +18,8 @@ val create_light
   -> t
   -> unit
 
+val set_light_typ : t -> int -> [ `Directional | `Point ] -> unit
 val set_light_position : t -> int -> Vector3.t -> unit
+val set_light_target : t -> int -> Vector3.t -> unit
+val set_light_color : t -> int -> Color.t -> unit
+val toggle_light : t -> int -> unit
